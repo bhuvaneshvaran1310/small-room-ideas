@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://bhuvaneshvaran1310.github.io/small-room-ideas/sitemap.xml
