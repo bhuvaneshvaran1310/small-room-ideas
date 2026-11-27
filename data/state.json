@@ -1,6 +1,7 @@
 {
   "telegram_offset": 0,
   "pending": null,
+  "chat_id": null,
   "used_topics": [],
   "extra_topics": [],
   "day_log": {
