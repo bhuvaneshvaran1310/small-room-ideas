@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parent
 DEFAULT_STATE = {
     "telegram_offset": 0,
     "pending": None,
+    "chat_id": None,
     "used_topics": [],
     "extra_topics": [],
     "day_log": {"date": "", "drafted": 0, "published": 0},
@@ -185,6 +186,19 @@ def handle_callback(cfg, state, chat_id, cq, now):
         new_pending(cfg, state, pending["topic"], now, chat_id, pending["redo_count"] + 1)
 
 
+def discover_chat(state):
+    """The first person to press Start on the bot becomes the owner. The id is saved in data/state.json."""
+    for u in tg.get_updates(state["telegram_offset"]):
+        m = u.get("message") or {}
+        chat = m.get("chat") or {}
+        if chat.get("type") == "private" and (m.get("text") or "").startswith("/start"):
+            state["chat_id"] = str(chat["id"])
+            state["telegram_offset"] = u["update_id"] + 1
+            tg.send_message(state["chat_id"], "Autopilot is connected. Each day I will send a draft here. Read it, then tap Publish.")
+            return state["chat_id"]
+    return None
+
+
 def process_updates(cfg, state, chat_id, now):
     for u in tg.get_updates(state["telegram_offset"]):
         state["telegram_offset"] = max(state["telegram_offset"], u["update_id"] + 1)
@@ -228,9 +242,14 @@ def run_once(cfg, state, demo=False, force=False, now=None):
         state["day_log"] = {"date": today, "drafted": 0, "published": 0}
     chat_id = None
     if not demo:
-        chat_id = os.environ.get("TELEGRAM_CHAT_ID")
-        if not (os.environ.get("TELEGRAM_BOT_TOKEN") and chat_id):
-            raise SystemExit("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are not set (see README step 5).")
+        if not os.environ.get("TELEGRAM_BOT_TOKEN"):
+            raise SystemExit("TELEGRAM_BOT_TOKEN is not set (see README).")
+        chat_id = os.environ.get("TELEGRAM_CHAT_ID") or state.get("chat_id")
+        if not chat_id:
+            chat_id = discover_chat(state)
+            if not chat_id:
+                print("No /start message found yet. Open your bot in Telegram, press Start, then run again.")
+                return state
         process_updates(cfg, state, chat_id, now)
     created = maybe_create_draft(cfg, state, chat_id, now, force=force)
     if demo and created:
